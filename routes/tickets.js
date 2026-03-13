@@ -74,6 +74,10 @@ function getUnreadState(ticket, viewer) {
     const actorId = resolveId(entry.actor);
     const createdAt = new Date(entry.createdAt);
 
+    if (entry.type === "message_posted") {
+      return false;
+    }
+
     if (actorId && actorId === viewerId) {
       return false;
     }
@@ -163,16 +167,18 @@ function ticketDetail(ticket, viewer) {
       kind: message.kind,
       createdAt: message.createdAt
     })),
-    activityLog: (ticket.activityLog || []).map((entry) => ({
-      id: entry._id,
-      type: entry.type,
-      actor: entry.actor,
-      actorName: entry.actorName,
-      actorRole: entry.actorRole,
-      description: entry.description,
-      meta: entry.meta,
-      createdAt: entry.createdAt
-    }))
+    activityLog: (ticket.activityLog || [])
+      .filter((entry) => entry.type !== "message_posted")
+      .map((entry) => ({
+        id: entry._id,
+        type: entry.type,
+        actor: entry.actor,
+        actorName: entry.actorName,
+        actorRole: entry.actorRole,
+        description: entry.description,
+        meta: entry.meta,
+        createdAt: entry.createdAt
+      }))
   };
 }
 
@@ -197,6 +203,16 @@ function canAccessTicket(ticket, user) {
 
 async function getTicketOr404(ticketId) {
   return Ticket.findById(ticketId).populate(ticketPopulate);
+}
+
+async function getTicketQueryForViewer(viewer, extraQuery = {}) {
+  const query = { ...extraQuery };
+
+  if (viewer.role === "consultant") {
+    query.consultant = viewer._id;
+  }
+
+  return Ticket.find(query).populate(ticketPopulate).sort({ updatedAt: -1, createdAt: -1 });
 }
 
 router.use(protect);
@@ -234,7 +250,24 @@ router.get(
       .populate(ticketPopulate)
       .sort({ updatedAt: -1, createdAt: -1 });
 
-    res.json({ tickets: tickets.map(ticketSummary) });
+    res.json({ tickets: tickets.map((ticket) => ticketSummary(ticket, req.user)) });
+  })
+);
+
+router.get(
+  "/notifications/summary",
+  asyncHandler(async (req, res) => {
+    const tickets = await getTicketQueryForViewer(req.user);
+    const notifications = tickets
+      .map((ticket) => ticketSummary(ticket, req.user))
+      .filter((ticket) => ticket.unreadCount > 0)
+      .sort((left, right) => new Date(right.latestUnreadAt || 0) - new Date(left.latestUnreadAt || 0));
+
+    res.json({
+      totalUnreadTickets: notifications.length,
+      totalUnreadItems: notifications.reduce((sum, ticket) => sum + ticket.unreadCount, 0),
+      notifications: notifications.slice(0, 8)
+    });
   })
 );
 
@@ -278,13 +311,14 @@ router.post(
       actor: req.user,
       description: `${req.user.name} creo el ticket`
     });
+    setTicketReadState(ticket, req.user);
 
     await ticket.save();
 
     const hydratedTicket = await getTicketOr404(ticket._id);
     res.status(201).json({
       message: "Ticket creado",
-      ticket: ticketDetail(hydratedTicket)
+      ticket: ticketDetail(hydratedTicket, req.user)
     });
   })
 );
@@ -302,7 +336,31 @@ router.get(
       return res.status(403).json({ message: "No puedes acceder a este ticket" });
     }
 
-    res.json({ ticket: ticketDetail(ticket) });
+    res.json({ ticket: ticketDetail(ticket, req.user) });
+  })
+);
+
+router.post(
+  "/:id/read",
+  asyncHandler(async (req, res) => {
+    const ticket = await Ticket.findById(req.params.id).populate(ticketPopulate);
+
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket no encontrado" });
+    }
+
+    if (!canAccessTicket(ticket, req.user)) {
+      return res.status(403).json({ message: "No puedes marcar este ticket como leido" });
+    }
+
+    setTicketReadState(ticket, req.user);
+    await ticket.save();
+
+    const updatedTicket = await getTicketOr404(ticket._id);
+    res.json({
+      message: "Ticket marcado como leido",
+      ticket: ticketDetail(updatedTicket, req.user)
+    });
   })
 );
 
@@ -336,18 +394,14 @@ router.post(
     });
 
     ticket.status = req.user.role === "consultant" ? "client_replied" : "in_progress";
-    addActivity(ticket, {
-      type: "message_posted",
-      actor: req.user,
-      description: `${req.user.name} envio un mensaje`
-    });
+    setTicketReadState(ticket, req.user);
 
     await ticket.save();
 
     const updatedTicket = await getTicketOr404(ticket._id);
     res.status(201).json({
       message: "Mensaje enviado",
-      ticket: ticketDetail(updatedTicket)
+      ticket: ticketDetail(updatedTicket, req.user)
     });
   })
 );
@@ -382,13 +436,14 @@ router.post(
       actor: req.user,
       description: `${req.user.name} tomo el ticket como admin principal`
     });
+    setTicketReadState(ticket, req.user);
 
     await ticket.save();
 
     const updatedTicket = await getTicketOr404(ticket._id);
     res.json({
       message: "Ticket asignado",
-      ticket: ticketDetail(updatedTicket)
+      ticket: ticketDetail(updatedTicket, req.user)
     });
   })
 );
@@ -420,13 +475,15 @@ router.post(
         actor: req.user,
         description: `${req.user.name} se unio al ticket como apoyo`
       });
-      await ticket.save();
     }
+
+    setTicketReadState(ticket, req.user);
+    await ticket.save();
 
     const updatedTicket = await getTicketOr404(ticket._id);
     res.json({
       message: "Participacion actualizada",
-      ticket: ticketDetail(updatedTicket)
+      ticket: ticketDetail(updatedTicket, req.user)
     });
   })
 );
@@ -464,13 +521,15 @@ router.post(
         description: `${req.user.name} invito a ${invitedAdmin.name} a unirse`,
         meta: { invitedAdminId: invitedAdmin._id }
       });
-      await ticket.save();
     }
+
+    setTicketReadState(ticket, req.user);
+    await ticket.save();
 
     const updatedTicket = await getTicketOr404(ticket._id);
     res.json({
       message: "Invitacion enviada",
-      ticket: ticketDetail(updatedTicket)
+      ticket: ticketDetail(updatedTicket, req.user)
     });
   })
 );
@@ -515,13 +574,14 @@ router.patch(
       actor: req.user,
       description: `${req.user.name} cambio el estado a ${status}`
     });
+    setTicketReadState(ticket, req.user);
 
     await ticket.save();
 
     const updatedTicket = await getTicketOr404(ticket._id);
     res.json({
       message: "Estado actualizado",
-      ticket: ticketDetail(updatedTicket)
+      ticket: ticketDetail(updatedTicket, req.user)
     });
   })
 );
@@ -548,13 +608,15 @@ router.post(
         actor: req.user,
         description: `${req.user.name} cerro el ticket`
       });
-      await ticket.save();
     }
+
+    setTicketReadState(ticket, req.user);
+    await ticket.save();
 
     const updatedTicket = await getTicketOr404(ticket._id);
     res.json({
       message: "Ticket cerrado",
-      ticket: ticketDetail(updatedTicket)
+      ticket: ticketDetail(updatedTicket, req.user)
     });
   })
 );

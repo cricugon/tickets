@@ -4,7 +4,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     tickets: [],
     status: "open",
     site: "all",
-    query: ""
+    query: "",
+    notifications: []
   };
 
   const currentUserPill = document.getElementById("current-user-pill");
@@ -23,6 +24,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const ticketForm = document.getElementById("ticket-form");
   const ticketSite = document.getElementById("ticket-site");
   const ticketFormMessage = document.getElementById("ticket-form-message");
+  const notificationButton = document.getElementById("notification-button");
+  const notificationCount = document.getElementById("notification-count");
+  const notificationPanel = document.getElementById("notification-panel");
+  const notificationList = document.getElementById("notification-list");
 
   try {
     state.user = await TicketsApp.requireUser("/");
@@ -39,7 +44,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   heroCopyText.textContent =
     state.user.role === "admin"
       ? "Tienes vista global de tickets y puedes encontrar incidencias filtrando por la web del consultor."
-      : "Tus tickets quedan ligados a tu web y cada respuesta mueve el estado y el timeline.";
+      : "Tus tickets quedan ligados a tu web y cada respuesta mueve el estado y los avisos no leidos.";
 
   if (state.user.role === "consultant") {
     openTicketModalButton.classList.remove("hidden");
@@ -75,13 +80,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.location.href = "/";
   });
 
-  refreshButton.addEventListener("click", loadTickets);
+  refreshButton.addEventListener("click", async () => {
+    await loadTickets();
+    await loadNotifications();
+  });
+
   openTicketModalButton.addEventListener("click", () => ticketModal.classList.add("open"));
   closeTicketModalButton.addEventListener("click", () => ticketModal.classList.remove("open"));
 
   ticketModal.addEventListener("click", (event) => {
     if (event.target === ticketModal) {
       ticketModal.classList.remove("open");
+    }
+  });
+
+  notificationButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isOpen = !notificationPanel.classList.contains("hidden");
+    notificationPanel.classList.toggle("hidden", isOpen);
+    notificationButton.setAttribute("aria-expanded", String(!isOpen));
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!notificationPanel.classList.contains("hidden") && !notificationPanel.contains(event.target) && event.target !== notificationButton) {
+      notificationPanel.classList.add("hidden");
+      notificationButton.setAttribute("aria-expanded", "false");
     }
   });
 
@@ -106,6 +129,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       ticketSite.value = state.user.site || "";
       ticketModal.classList.remove("open");
       await loadTickets();
+      await loadNotifications();
     } catch (error) {
       ticketFormMessage.textContent = error.message;
     }
@@ -122,10 +146,51 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  async function loadNotifications() {
+    try {
+      const data = await TicketsApp.api("/api/tickets/notifications/summary");
+      state.notifications = data.notifications;
+      renderNotifications(data.totalUnreadItems);
+    } catch (error) {
+      TicketsApp.createToast(error.message, "error");
+    }
+  }
+
+  function renderNotifications(totalUnreadItems) {
+    notificationCount.textContent = totalUnreadItems;
+    notificationCount.classList.toggle("hidden", totalUnreadItems === 0);
+
+    if (!state.notifications.length) {
+      notificationList.innerHTML = '<div class="empty-state">No hay avisos pendientes.</div>';
+      return;
+    }
+
+    notificationList.innerHTML = state.notifications
+      .map(
+        (ticket) => `
+          <button class="notification-item" type="button" data-ticket-id="${ticket.id}">
+            <strong>${TicketsApp.escapeHtml(ticket.reference)} · ${TicketsApp.escapeHtml(ticket.title)}</strong>
+            <span>${TicketsApp.escapeHtml(ticket.site)} · ${ticket.unreadCount} novedad(es) · ${TicketsApp.relativeDate(ticket.latestUnreadAt || ticket.updatedAt)}</span>
+          </button>
+        `
+      )
+      .join("");
+
+    notificationList.querySelectorAll("[data-ticket-id]").forEach((button) => {
+      button.addEventListener("click", () => {
+        window.location.href = `/ticket/${button.dataset.ticketId}`;
+      });
+    });
+  }
+
   function renderMetrics() {
     document.getElementById("metric-visible").textContent = state.tickets.length;
     document.getElementById("metric-critical").textContent = state.tickets.filter((ticket) => ticket.severity === "critical").length;
     document.getElementById("metric-support").textContent = state.tickets.filter((ticket) => (ticket.supportingAdmins || []).length > 0).length;
+  }
+
+  function navigateToTicket(ticketId) {
+    window.location.href = `/ticket/${ticketId}`;
   }
 
   function renderTickets() {
@@ -144,12 +209,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       const safeDescription = TicketsApp.escapeHtml(ticket.description.slice(0, 90));
       const safeSite = TicketsApp.escapeHtml(ticket.site);
       const safeAdmin = TicketsApp.escapeHtml(ticket.primaryAdmin ? ticket.primaryAdmin.name : "Sin admin principal");
+      const unreadMarkup = ticket.hasUnread
+        ? `<span class="chip unread-chip">Nuevo ${ticket.unreadCount}</span>`
+        : '<span class="muted-line">Sin novedades</span>';
+
       const row = document.createElement("tr");
-      row.className = "ticket-row";
+      row.className = `ticket-row${ticket.hasUnread ? " has-unread" : ""}`;
+      row.tabIndex = 0;
+      row.setAttribute("role", "link");
+      row.dataset.ticketId = ticket.id;
       row.innerHTML = `
         <td><span class="chip status-${ticket.status}">${TicketsApp.statusLabels[ticket.status]}</span></td>
         <td>
-          <button type="button" class="headline-link" data-ticket-id="${ticket.id}">${safeReference}</button>
+          <span class="headline-link">${safeReference}</span>
           <span class="muted-line">${ticket.participantCount} participante(s)</span>
         </td>
         <td>
@@ -157,16 +229,20 @@ document.addEventListener("DOMContentLoaded", async () => {
           <span class="muted-line">${safeDescription}</span>
         </td>
         <td>${safeSite}</td>
+        <td>${unreadMarkup}</td>
         <td>${safeAdmin}</td>
         <td>${TicketsApp.relativeDate(ticket.updatedAt)}</td>
       `;
-      ticketsBody.appendChild(row);
-    });
 
-    ticketsBody.querySelectorAll("[data-ticket-id]").forEach((button) => {
-      button.addEventListener("click", () => {
-        window.location.href = `/ticket/${button.dataset.ticketId}`;
+      row.addEventListener("click", () => navigateToTicket(ticket.id));
+      row.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          navigateToTicket(ticket.id);
+        }
       });
+
+      ticketsBody.appendChild(row);
     });
   }
 
@@ -191,4 +267,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   await loadTickets();
+  await loadNotifications();
+
+  window.setInterval(async () => {
+    await loadTickets();
+    await loadNotifications();
+  }, 15000);
 });

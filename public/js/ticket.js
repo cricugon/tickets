@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     user: null,
     ticket: null,
     admins: [],
-    tab: "all"
+    notifications: []
   };
 
   const detailUserPill = document.getElementById("detail-user-pill");
@@ -29,7 +29,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   const messageForm = document.getElementById("message-form");
   const messageBody = document.getElementById("message-body");
   const messageBox = document.getElementById("message-box");
-  const timelineList = document.getElementById("timeline-list");
+  const messagesList = document.getElementById("messages-list");
+  const activityList = document.getElementById("activity-list");
+  const notificationButton = document.getElementById("notification-button");
+  const notificationCount = document.getElementById("notification-count");
+  const notificationPanel = document.getElementById("notification-panel");
+  const notificationList = document.getElementById("notification-list");
 
   try {
     state.user = await TicketsApp.requireUser("/");
@@ -44,14 +49,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.location.href = "/";
   });
 
-  document.querySelectorAll("[data-timeline-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.tab = button.dataset.timelineTab;
-      document.querySelectorAll("[data-timeline-tab]").forEach((tab) => {
-        tab.classList.toggle("active", tab === button);
-      });
-      renderTimeline();
-    });
+  notificationButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isOpen = !notificationPanel.classList.contains("hidden");
+    notificationPanel.classList.toggle("hidden", isOpen);
+    notificationButton.setAttribute("aria-expanded", String(!isOpen));
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!notificationPanel.classList.contains("hidden") && !notificationPanel.contains(event.target) && event.target !== notificationButton) {
+      notificationPanel.classList.add("hidden");
+      notificationButton.setAttribute("aria-expanded", "false");
+    }
   });
 
   messageForm.addEventListener("submit", async (event) => {
@@ -65,6 +74,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       messageBody.value = "";
       messageBox.textContent = "";
       await loadTicket();
+      await loadNotifications();
       TicketsApp.createToast("Mensaje enviado", "success");
     } catch (error) {
       messageBox.textContent = error.message;
@@ -107,6 +117,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         body
       });
       await loadTicket();
+      await loadNotifications();
       TicketsApp.createToast(successMessage, "success");
     } catch (error) {
       TicketsApp.createToast(error.message, "error");
@@ -120,6 +131,43 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const data = await TicketsApp.api("/api/users/admins");
     state.admins = data.admins;
+  }
+
+  async function loadNotifications() {
+    try {
+      const data = await TicketsApp.api("/api/tickets/notifications/summary");
+      state.notifications = data.notifications;
+      renderNotifications(data.totalUnreadItems);
+    } catch (error) {
+      TicketsApp.createToast(error.message, "error");
+    }
+  }
+
+  function renderNotifications(totalUnreadItems) {
+    notificationCount.textContent = totalUnreadItems;
+    notificationCount.classList.toggle("hidden", totalUnreadItems === 0);
+
+    if (!state.notifications.length) {
+      notificationList.innerHTML = '<div class="empty-state">No hay avisos pendientes.</div>';
+      return;
+    }
+
+    notificationList.innerHTML = state.notifications
+      .map(
+        (ticket) => `
+          <button class="notification-item" type="button" data-ticket-id="${ticket.id}">
+            <strong>${TicketsApp.escapeHtml(ticket.reference)} · ${TicketsApp.escapeHtml(ticket.title)}</strong>
+            <span>${TicketsApp.escapeHtml(ticket.site)} · ${ticket.unreadCount} novedad(es) · ${TicketsApp.relativeDate(ticket.latestUnreadAt || ticket.updatedAt)}</span>
+          </button>
+        `
+      )
+      .join("");
+
+    notificationList.querySelectorAll("[data-ticket-id]").forEach((button) => {
+      button.addEventListener("click", () => {
+        window.location.href = `/ticket/${button.dataset.ticketId}`;
+      });
+    });
   }
 
   function renderInviteOptions() {
@@ -154,7 +202,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     summaryChips.innerHTML = `
       <span class="chip status-${ticket.status}">${TicketsApp.statusLabels[ticket.status]}</span>
       <span class="chip severity-${ticket.severity}">${TicketsApp.severityLabels[ticket.severity]}</span>
+      ${ticket.hasUnread ? `<span class="chip unread-chip">Nuevo ${ticket.unreadCount}</span>` : ""}
     `;
+
+    const invitedNames = ticket.invitedAdmins.length
+      ? ticket.invitedAdmins.map((admin) => TicketsApp.escapeHtml(admin.name)).join(", ")
+      : "Ninguno";
 
     summaryList.innerHTML = `
       <div class="summary-item">
@@ -168,6 +221,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       <div class="summary-item">
         <span>Admin principal</span>
         <strong>${TicketsApp.escapeHtml(ticket.primaryAdmin?.name || "Sin asignar")}</strong>
+      </div>
+      <div class="summary-item">
+        <span>Admins invitados</span>
+        <strong>${invitedNames}</strong>
       </div>
       <div class="summary-item">
         <span>Creado</span>
@@ -220,21 +277,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderInviteOptions();
   }
 
-  function renderTimeline() {
-    const items = TicketsApp.mergeTimeline(state.ticket, state.tab);
+  function renderMessages() {
+    const items = [...state.ticket.messages].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
 
     if (!items.length) {
-      timelineList.innerHTML = '<div class="empty-state">No hay actividad para mostrar.</div>';
+      messagesList.innerHTML = '<div class="empty-state">Aun no hay mensajes en este ticket.</div>';
       return;
     }
 
-    timelineList.innerHTML = items
+    messagesList.innerHTML = items
       .map(
         (item) => `
-          <article class="timeline-item">
+          <article class="timeline-item message-entry">
             <div class="timeline-meta">
-              <strong>${TicketsApp.escapeHtml(item.title)}</strong>
-              <span>${item.subtitle} · ${TicketsApp.formatDate(item.createdAt)}</span>
+              <strong>${TicketsApp.escapeHtml(item.authorName)}</strong>
+              <span>${item.authorRole === "admin" ? "Admin" : "Consultor"} · ${TicketsApp.formatDate(item.createdAt)}</span>
             </div>
             <div class="timeline-body">${TicketsApp.escapeHtml(item.body)}</div>
           </article>
@@ -243,12 +300,46 @@ document.addEventListener("DOMContentLoaded", async () => {
       .join("");
   }
 
+  function renderActivity() {
+    const items = [...state.ticket.activityLog].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+
+    if (!items.length) {
+      activityList.innerHTML = '<div class="empty-state">Aun no hay eventos registrados.</div>';
+      return;
+    }
+
+    activityList.innerHTML = items
+      .map(
+        (item) => `
+          <article class="timeline-item activity-entry">
+            <div class="timeline-meta">
+              <strong>${TicketsApp.escapeHtml(item.actorName)}</strong>
+              <span>${item.actorRole === "admin" ? "Admin" : item.actorRole === "consultant" ? "Consultor" : "Sistema"} · ${TicketsApp.formatDate(item.createdAt)}</span>
+            </div>
+            <div class="timeline-body">${TicketsApp.escapeHtml(item.description)}</div>
+          </article>
+        `
+      )
+      .join("");
+  }
+
+  async function markTicketAsRead() {
+    const data = await TicketsApp.api(`/api/tickets/${ticketId}/read`, { method: "POST" });
+    state.ticket = data.ticket;
+  }
+
   async function loadTicket(silent = false) {
     try {
       const data = await TicketsApp.api(`/api/tickets/${ticketId}`);
       state.ticket = data.ticket;
+
+      if (state.ticket.hasUnread) {
+        await markTicketAsRead();
+      }
+
       renderSummary();
-      renderTimeline();
+      renderMessages();
+      renderActivity();
     } catch (error) {
       if (!silent) {
         TicketsApp.createToast(error.message, "error");
@@ -258,8 +349,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await loadAdmins();
   await loadTicket();
+  await loadNotifications();
 
-  window.setInterval(() => {
-    loadTicket(true);
+  window.setInterval(async () => {
+    await loadTicket(true);
+    await loadNotifications();
   }, 8000);
 });

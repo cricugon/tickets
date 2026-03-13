@@ -17,6 +17,22 @@
         </a>
         <div class="topbar-actions">
           <a href="/app" class="secondary-button">Volver</a>
+          <div class="notification-shell">
+            <button id="notification-button" class="notification-button" type="button" aria-expanded="false">
+              <span class="notification-icon">&#128276;</span>
+              <span>Avisos</span>
+              <span id="notification-count" class="notification-badge hidden">0</span>
+            </button>
+            <div id="notification-panel" class="notification-panel hidden">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">Notificaciones</h3>
+                  <p class="card-subtitle">Tickets con novedades aun no revisadas.</p>
+                </div>
+              </div>
+              <div id="notification-list" class="notification-list"></div>
+            </div>
+          </div>
           <div class="user-pill" id="detail-user-pill">Cargando usuario...</div>
           <button id="detail-logout-button" class="ghost-button" type="button">Salir</button>
         </div>
@@ -88,7 +104,7 @@
               <div class="card-header">
                 <div>
                   <h2 class="card-title">Responder ticket</h2>
-                  <p class="card-subtitle">Cada mensaje actualiza el timeline y deja traza del autor.</p>
+                  <p class="card-subtitle">El chat queda separado del registro de eventos para no mezclar contexto.</p>
                 </div>
               </div>
               <form id="message-form" class="composer">
@@ -102,18 +118,23 @@
             </div>
 
             <div class="card">
-              <div class="toolbar">
+              <div class="card-header">
                 <div>
-                  <h2 class="card-title">Timeline del ticket</h2>
-                  <p class="card-subtitle">Mensajes, uniones de admins, invitaciones y cambios de estado.</p>
-                </div>
-                <div class="tabs">
-                  <button class="tab-button active" type="button" data-timeline-tab="all">Todo</button>
-                  <button class="tab-button" type="button" data-timeline-tab="messages">Mensajes</button>
-                  <button class="tab-button" type="button" data-timeline-tab="activity">Actividad</button>
+                  <h2 class="card-title">Chat del ticket</h2>
+                  <p class="card-subtitle">Solo mensajes entre consultor y admins.</p>
                 </div>
               </div>
-              <div id="timeline-list" class="timeline-list"></div>
+              <div id="messages-list" class="timeline-list"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Actividad y eventos</h2>
+                  <p class="card-subtitle">Asignaciones, invitaciones, cambios de estado y cierres.</p>
+                </div>
+              </div>
+              <div id="activity-list" class="timeline-list"></div>
             </div>
           </section>
         </div>

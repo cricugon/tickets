@@ -16,6 +16,22 @@
           <span>SiteOps Desk</span>
         </a>
         <div class="topbar-actions">
+          <div class="notification-shell">
+            <button id="notification-button" class="notification-button" type="button" aria-expanded="false">
+              <span class="notification-icon">&#128276;</span>
+              <span>Avisos</span>
+              <span id="notification-count" class="notification-badge hidden">0</span>
+            </button>
+            <div id="notification-panel" class="notification-panel hidden">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">Notificaciones</h3>
+                  <p class="card-subtitle">Mensajes o cambios en tickets sin revisar.</p>
+                </div>
+              </div>
+              <div id="notification-list" class="notification-list"></div>
+            </div>
+          </div>
           <div class="user-pill" id="current-user-pill">Cargando usuario...</div>
           <button id="logout-button" class="ghost-button" type="button">Salir</button>
         </div>
@@ -88,7 +104,8 @@
                   <th>Referencia</th>
                   <th>Ticket</th>
                   <th>Web</th>
-                  <th>Participantes</th>
+                  <th>Avisos</th>
+                  <th>Admin principal</th>
                   <th>Ultima actualizacion</th>
                 </tr>
               </thead>

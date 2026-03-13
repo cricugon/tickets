@@ -89,6 +89,7 @@ button {
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
 }
 
 .user-pill,
@@ -111,6 +112,78 @@ button {
   background: var(--surface);
   color: var(--accent-deep);
   border-color: rgba(17, 60, 83, 0.16);
+}
+
+.notification-shell {
+  position: relative;
+}
+
+.notification-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(17, 60, 83, 0.16);
+  background: var(--surface);
+  color: var(--accent-deep);
+  border-radius: 999px;
+  padding: 11px 16px;
+}
+
+.notification-icon {
+  font-size: 1rem;
+}
+
+.notification-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.notification-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(380px, calc(100vw - 36px));
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid rgba(32, 52, 73, 0.08);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 20;
+}
+
+.notification-list {
+  display: grid;
+  gap: 12px;
+}
+
+.notification-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(17, 60, 83, 0.08);
+  border-radius: 18px;
+  background: rgba(27, 190, 201, 0.06);
+  padding: 14px 16px;
+  color: var(--text);
+}
+
+.notification-item strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.notification-item span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .primary-button {
@@ -319,11 +392,22 @@ button {
 }
 
 .ticket-row {
+  cursor: pointer;
   transition: background 0.18s ease;
 }
 
 .ticket-row:hover {
   background: rgba(27, 190, 201, 0.06);
+}
+
+.ticket-row.has-unread {
+  background: rgba(27, 190, 201, 0.08);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.ticket-row:focus-visible {
+  outline: 2px solid rgba(27, 190, 201, 0.45);
+  outline-offset: -2px;
 }
 
 .ticket-row button {
@@ -382,6 +466,11 @@ button {
 .chip.severity-critical {
   background: rgba(217, 92, 73, 0.16);
   color: #a4382e;
+}
+
+.chip.unread-chip {
+  background: rgba(217, 92, 73, 0.14);
+  color: #9f3f32;
 }
 
 .inline-banner {
@@ -527,6 +616,15 @@ button {
 
 .timeline-item {
   padding: 18px 20px;
+}
+
+.timeline-item.message-entry {
+  border-left: 4px solid rgba(27, 190, 201, 0.6);
+}
+
+.timeline-item.activity-entry {
+  border-left: 4px solid rgba(17, 60, 83, 0.2);
+  background: var(--surface-alt);
 }
 
 .timeline-meta {
