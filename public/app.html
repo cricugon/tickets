@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SiteOps Desk | Tickets</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/dashboard.js"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="/app">
+          <span class="brand-mark">S</span>
+          <span>SiteOps Desk</span>
+        </a>
+        <div class="topbar-actions">
+          <div class="user-pill" id="current-user-pill">Cargando usuario...</div>
+          <button id="logout-button" class="ghost-button" type="button">Salir</button>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-banner">
+          <div class="hero-copy">
+            <p class="chip">Sistema de tickets</p>
+            <h1>Gestiona soporte por sitio, prioridad y estado.</h1>
+            <p id="hero-copy-text">
+              Carga tus tickets abiertos o cerrados, localiza por web y entra en el detalle para ver
+              mensajes, cambios de estado y admins implicados.
+            </p>
+          </div>
+          <div class="hero-metrics">
+            <div class="metric-card">
+              <span class="muted">Tickets visibles</span>
+              <strong id="metric-visible">0</strong>
+            </div>
+            <div class="metric-card">
+              <span class="muted">Criticos visibles</span>
+              <strong id="metric-critical">0</strong>
+            </div>
+            <div class="metric-card">
+              <span class="muted">Tickets con apoyo</span>
+              <strong id="metric-support">0</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <main class="content">
+        <div class="inline-banner">
+          <div>
+            <strong id="banner-title">Panel de tickets</strong>
+            <div class="muted" id="banner-copy">Cargando informacion del usuario...</div>
+          </div>
+          <button id="open-ticket-modal" class="primary-button hidden" type="button">Crear ticket</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="toolbar-controls">
+            <div class="tabs">
+              <button class="tab-button active" type="button" data-status-tab="open">Abiertos</button>
+              <button class="tab-button" type="button" data-status-tab="closed">Cerrados</button>
+            </div>
+            <input id="search-input" class="filter-input" type="search" placeholder="Buscar por asunto, referencia o web" />
+            <select id="site-filter" class="filter-select hidden">
+              <option value="all">Todas las webs</option>
+            </select>
+          </div>
+          <div class="toolbar-actions">
+            <button id="refresh-button" class="secondary-button" type="button">Actualizar</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Historico de tickets</h2>
+              <p class="card-subtitle">Listado de tickets filtrado por estado y, en admins, por web.</p>
+            </div>
+          </div>
+          <div id="tickets-container">
+            <table class="ticket-table">
+              <thead>
+                <tr>
+                  <th>Estado</th>
+                  <th>Referencia</th>
+                  <th>Ticket</th>
+                  <th>Web</th>
+                  <th>Participantes</th>
+                  <th>Ultima actualizacion</th>
+                </tr>
+              </thead>
+              <tbody id="tickets-body"></tbody>
+            </table>
+            <div id="tickets-empty" class="empty-state hidden">No hay tickets para este filtro.</div>
+          </div>
+        </div>
+
+        <p class="footer-note">Sistema de tickets Node.js + MongoDB</p>
+      </main>
+
+      <div id="ticket-modal" class="modal">
+        <div class="modal-card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Crear ticket</h2>
+              <p class="card-subtitle">Abre una incidencia indicando gravedad, asunto y detalle.</p>
+            </div>
+            <button id="close-ticket-modal" class="ghost-button" type="button">Cerrar</button>
+          </div>
+          <form id="ticket-form" class="form-grid">
+            <div class="inline-two">
+              <div class="field">
+                <label for="ticket-title">Asunto</label>
+                <input id="ticket-title" name="title" type="text" placeholder="Ej. Caida de la web" required />
+              </div>
+              <div class="field">
+                <label for="ticket-severity">Gravedad</label>
+                <select id="ticket-severity" name="severity">
+                  <option value="low">Baja</option>
+                  <option value="medium">Media</option>
+                  <option value="high">Alta</option>
+                  <option value="critical">Critica</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="ticket-site">Web</label>
+              <input id="ticket-site" name="site" type="text" placeholder="midominio.com" />
+            </div>
+            <div class="field">
+              <label for="ticket-description">Descripcion</label>
+              <textarea id="ticket-description" name="description" placeholder="Describe el problema y el contexto" required></textarea>
+            </div>
+            <button class="primary-button" type="submit">Guardar ticket</button>
+          </form>
+          <div id="ticket-form-message" class="message-box"></div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

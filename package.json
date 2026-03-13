@@ -1,0 +1,29 @@
+{
+  "name": "tickets-system",
+  "version": "1.0.0",
+  "description": "Sistema de tickets cliente-servidor con Node.js, Express y MongoDB",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "seed": "node scripts/seed.js"
+  },
+  "keywords": [
+    "tickets",
+    "node",
+    "express",
+    "mongodb"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.0",
+    "cookie-parser": "^1.4.0",
+    "dotenv": "^16.0.0",
+    "express": "^4.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^8.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SiteOps Desk | Acceso</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/auth.js"></script>
+  </head>
+  <body>
+    <div class="auth-layout">
+      <section class="auth-copy">
+        <div class="brand">
+          <span class="brand-mark">S</span>
+          <span>SiteOps Desk</span>
+        </div>
+        <div>
+          <p class="chip">Ticketing cliente-servidor</p>
+          <h1>Centraliza soporte, seguimiento y colaboracion en cada web.</h1>
+          <p>
+            Los consultores crean tickets con gravedad y asunto. Los admins los toman, invitan a otros
+            admins si hace falta y todo queda reflejado en el timeline.
+          </p>
+        </div>
+        <ul class="auth-list">
+          <li>Vista abierta y cerrada de tickets con filtro por web para admins.</li>
+          <li>Mensajes e historial de acciones con fecha, autor y cambios de estado.</li>
+          <li>Registro de admins mediante codigo y consultores asociados a su propia web.</li>
+        </ul>
+      </section>
+      <section class="auth-panel-wrap">
+        <div class="auth-panel">
+          <p class="chip">Acceso seguro</p>
+          <h1>Entrar al sistema</h1>
+          <p class="muted">Inicia sesion o crea una cuenta segun tu rol.</p>
+
+          <div class="tabs auth-switch">
+            <button class="tab-button active" type="button" data-auth-tab="login">Login</button>
+            <button class="tab-button" type="button" data-auth-tab="register">Registro</button>
+          </div>
+
+          <form id="login-form" class="form-grid">
+            <div class="field">
+              <label for="login-email">Email</label>
+              <input id="login-email" name="email" type="email" placeholder="tu@email.com" required />
+            </div>
+            <div class="field">
+              <label for="login-password">Password</label>
+              <input id="login-password" name="password" type="password" placeholder="Tu password" required />
+            </div>
+            <button class="primary-button" type="submit">Acceder</button>
+          </form>
+
+          <form id="register-form" class="form-grid hidden">
+            <div class="inline-two">
+              <div class="field">
+                <label for="register-name">Nombre</label>
+                <input id="register-name" name="name" type="text" placeholder="Nombre completo" required />
+              </div>
+              <div class="field">
+                <label for="register-role">Rol</label>
+                <select id="register-role" name="role">
+                  <option value="consultant">Consultor</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="register-email">Email</label>
+              <input id="register-email" name="email" type="email" placeholder="tu@email.com" required />
+            </div>
+            <div class="inline-two">
+              <div class="field" id="site-field">
+                <label for="register-site">Web asociada</label>
+                <input id="register-site" name="site" type="text" placeholder="midominio.com" />
+              </div>
+              <div class="field hidden" id="admin-code-field">
+                <label for="register-admin-code">Codigo admin</label>
+                <input id="register-admin-code" name="adminCode" type="text" placeholder="Codigo de alta" />
+              </div>
+              <div class="field">
+                <label for="register-password">Password</label>
+                <input id="register-password" name="password" type="password" placeholder="Minimo 8 caracteres" required />
+              </div>
+            </div>
+            <p class="helper">Los admins necesitan el codigo definido en `ADMIN_REGISTRATION_CODE`.</p>
+            <button class="primary-button" type="submit">Crear cuenta</button>
+          </form>
+
+          <div id="auth-message" class="message-box"></div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

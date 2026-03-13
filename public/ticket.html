@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SiteOps Desk | Ticket</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/ticket.js"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="/app">
+          <span class="brand-mark">S</span>
+          <span>SiteOps Desk</span>
+        </a>
+        <div class="topbar-actions">
+          <a href="/app" class="secondary-button">Volver</a>
+          <div class="user-pill" id="detail-user-pill">Cargando usuario...</div>
+          <button id="detail-logout-button" class="ghost-button" type="button">Salir</button>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-banner">
+          <div class="hero-copy">
+            <p class="chip" id="ticket-reference-chip">Ticket</p>
+            <h1 id="ticket-hero-title">Cargando ticket...</h1>
+            <p id="ticket-hero-copy">Recuperando detalle, participantes y timeline.</p>
+          </div>
+          <div class="hero-metrics">
+            <div class="metric-card">
+              <span class="muted">Estado</span>
+              <strong id="hero-status">-</strong>
+            </div>
+            <div class="metric-card">
+              <span class="muted">Prioridad</span>
+              <strong id="hero-severity">-</strong>
+            </div>
+            <div class="metric-card">
+              <span class="muted">Actualizado</span>
+              <strong id="hero-updated">-</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <main class="content">
+        <div class="detail-layout">
+          <aside class="card summary-card">
+            <div class="summary-stack">
+              <div>
+                <h2 class="card-title">Resumen</h2>
+                <p class="card-subtitle">Propietario, admins, web, estado y acciones.</p>
+              </div>
+              <div class="chips" id="summary-chips"></div>
+              <div class="summary-list" id="summary-list"></div>
+              <div class="participants-list" id="participants-list"></div>
+              <div class="form-grid">
+                <button id="claim-button" class="primary-button hidden" type="button">Coger ticket</button>
+                <button id="join-button" class="secondary-button hidden" type="button">Unirme como apoyo</button>
+                <button id="close-button" class="ghost-button hidden" type="button">Cerrar ticket</button>
+                <div id="status-field" class="field hidden">
+                  <label for="status-select">Cambiar estado</label>
+                  <select id="status-select">
+                    <option value="open">Abierto</option>
+                    <option value="claimed">Asignado</option>
+                    <option value="in_progress">En progreso</option>
+                    <option value="waiting_consultant">Esperando consultor</option>
+                    <option value="client_replied">Respondio cliente</option>
+                    <option value="closed">Cerrado</option>
+                  </select>
+                </div>
+                <div id="invite-field" class="field hidden">
+                  <label for="invite-select">Invitar admin</label>
+                  <div class="inline-two">
+                    <select id="invite-select"></select>
+                    <button id="invite-button" class="secondary-button" type="button">Invitar</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <section class="grid">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Responder ticket</h2>
+                  <p class="card-subtitle">Cada mensaje actualiza el timeline y deja traza del autor.</p>
+                </div>
+              </div>
+              <form id="message-form" class="composer">
+                <div class="field">
+                  <label for="message-body">Mensaje</label>
+                  <textarea id="message-body" name="body" placeholder="Escribe aqui tu mensaje"></textarea>
+                </div>
+                <button class="primary-button" type="submit">Enviar mensaje</button>
+              </form>
+              <div id="message-box" class="message-box"></div>
+            </div>
+
+            <div class="card">
+              <div class="toolbar">
+                <div>
+                  <h2 class="card-title">Timeline del ticket</h2>
+                  <p class="card-subtitle">Mensajes, uniones de admins, invitaciones y cambios de estado.</p>
+                </div>
+                <div class="tabs">
+                  <button class="tab-button active" type="button" data-timeline-tab="all">Todo</button>
+                  <button class="tab-button" type="button" data-timeline-tab="messages">Mensajes</button>
+                  <button class="tab-button" type="button" data-timeline-tab="activity">Actividad</button>
+                </div>
+              </div>
+              <div id="timeline-list" class="timeline-list"></div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
