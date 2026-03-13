@@ -45,7 +45,68 @@ function resolveId(value) {
   return value.toString();
 }
 
+function isAdminParticipant(ticket, viewer) {
+  const viewerId = resolveId(viewer._id || viewer.id || viewer);
+
+  return Boolean(
+    resolveId(ticket.primaryAdmin) === viewerId ||
+      (ticket.supportingAdmins || []).some((admin) => resolveId(admin) === viewerId) ||
+      (ticket.invitedAdmins || []).some((admin) => resolveId(admin) === viewerId)
+  );
+}
+
+function isTrackedForUser(ticket, viewer) {
+  if (!viewer) {
+    return false;
+  }
+
+  if (viewer.role === "consultant") {
+    return resolveId(ticket.consultant) === resolveId(viewer._id || viewer.id || viewer);
+  }
+
+  return isAdminParticipant(ticket, viewer);
+}
+
+function buildScopeCondition(viewer, scope = "mine") {
+  if (viewer.role !== "admin") {
+    return { consultant: viewer._id };
+  }
+
+  const participantCondition = {
+    $or: [
+      { primaryAdmin: viewer._id },
+      { supportingAdmins: viewer._id },
+      { invitedAdmins: viewer._id }
+    ]
+  };
+
+  if (scope === "others") {
+    return {
+      $nor: [
+        { primaryAdmin: viewer._id },
+        { supportingAdmins: viewer._id },
+        { invitedAdmins: viewer._id }
+      ]
+    };
+  }
+
+  if (scope === "all") {
+    return {};
+  }
+
+  return participantCondition;
+}
+
 function getUnreadState(ticket, viewer) {
+  if (!isTrackedForUser(ticket, viewer)) {
+    return {
+      unreadCount: 0,
+      hasUnread: false,
+      lastSeenAt: null,
+      latestUnreadAt: null
+    };
+  }
+
   if (!viewer) {
     return {
       unreadCount: 0,
@@ -116,6 +177,7 @@ function setTicketReadState(ticket, viewer) {
 function ticketSummary(ticket, viewer) {
   const participantIds = new Set();
   const unreadState = getUnreadState(ticket, viewer);
+  const isParticipant = isTrackedForUser(ticket, viewer);
 
   if (ticket.consultant?._id) {
     participantIds.add(ticket.consultant._id.toString());
@@ -148,6 +210,7 @@ function ticketSummary(ticket, viewer) {
     updatedAt: ticket.updatedAt,
     closedAt: ticket.closedAt,
     participantCount: participantIds.size,
+    isParticipant,
     unreadCount: unreadState.unreadCount,
     hasUnread: unreadState.hasUnread,
     lastSeenAt: unreadState.lastSeenAt,
@@ -205,13 +268,37 @@ async function getTicketOr404(ticketId) {
   return Ticket.findById(ticketId).populate(ticketPopulate);
 }
 
-async function getTicketQueryForViewer(viewer, extraQuery = {}) {
-  const query = { ...extraQuery };
+async function getTicketQueryForViewer(viewer, { status = "all", site = "all", q = "", scope = "mine" } = {}) {
+  const conditions = [];
 
-  if (viewer.role === "consultant") {
-    query.consultant = viewer._id;
+  if (status === "closed") {
+    conditions.push({ status: "closed" });
+  } else if (status !== "all") {
+    conditions.push({ status: { $ne: "closed" } });
   }
 
+  const scopeCondition = buildScopeCondition(viewer, scope);
+
+  if (Object.keys(scopeCondition).length > 0) {
+    conditions.push(scopeCondition);
+  }
+
+  if (viewer.role === "admin" && site && site !== "all") {
+    conditions.push({ site });
+  }
+
+  if (q && q.trim()) {
+    conditions.push({
+      $or: [
+        { title: { $regex: q.trim(), $options: "i" } },
+        { reference: { $regex: q.trim(), $options: "i" } },
+        { description: { $regex: q.trim(), $options: "i" } },
+        { site: { $regex: q.trim(), $options: "i" } }
+      ]
+    });
+  }
+
+  const query = conditions.length ? { $and: conditions } : {};
   return Ticket.find(query).populate(ticketPopulate).sort({ updatedAt: -1, createdAt: -1 });
 }
 
@@ -220,35 +307,8 @@ router.use(protect);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const { status = "open", site = "all", q = "" } = req.query;
-    const query = {};
-
-    if (status === "closed") {
-      query.status = "closed";
-    } else if (status === "all") {
-      query.status = { $exists: true };
-    } else {
-      query.status = { $ne: "closed" };
-    }
-
-    if (req.user.role === "consultant") {
-      query.consultant = req.user._id;
-    } else if (site && site !== "all") {
-      query.site = site;
-    }
-
-    if (q && q.trim()) {
-      query.$or = [
-        { title: { $regex: q.trim(), $options: "i" } },
-        { reference: { $regex: q.trim(), $options: "i" } },
-        { description: { $regex: q.trim(), $options: "i" } },
-        { site: { $regex: q.trim(), $options: "i" } }
-      ];
-    }
-
-    const tickets = await Ticket.find(query)
-      .populate(ticketPopulate)
-      .sort({ updatedAt: -1, createdAt: -1 });
+    const { status = "open", site = "all", q = "", scope = "mine" } = req.query;
+    const tickets = await getTicketQueryForViewer(req.user, { status, site, q, scope });
 
     res.json({ tickets: tickets.map((ticket) => ticketSummary(ticket, req.user)) });
   })
@@ -257,7 +317,7 @@ router.get(
 router.get(
   "/notifications/summary",
   asyncHandler(async (req, res) => {
-    const tickets = await getTicketQueryForViewer(req.user);
+    const tickets = await getTicketQueryForViewer(req.user, { scope: "mine", status: "all" });
     const notifications = tickets
       .map((ticket) => ticketSummary(ticket, req.user))
       .filter((ticket) => ticket.unreadCount > 0)

@@ -3,6 +3,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     user: null,
     tickets: [],
     status: "open",
+    scope: "mine",
     site: "all",
     query: "",
     notifications: []
@@ -17,6 +18,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const refreshButton = document.getElementById("refresh-button");
   const searchInput = document.getElementById("search-input");
   const siteFilter = document.getElementById("site-filter");
+  const scopeTabs = document.getElementById("scope-tabs");
   const ticketsBody = document.getElementById("tickets-body");
   const ticketsEmpty = document.getElementById("tickets-empty");
   const ticketModal = document.getElementById("ticket-modal");
@@ -51,7 +53,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     ticketSite.value = state.user.site;
     ticketSite.readOnly = true;
   } else {
+    scopeTabs.classList.remove("hidden");
     siteFilter.classList.remove("hidden");
+    syncAdminCopy();
     await loadSites();
   }
 
@@ -61,6 +65,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       document.querySelectorAll("[data-status-tab]").forEach((tab) => {
         tab.classList.toggle("active", tab === button);
       });
+      await loadTickets();
+    });
+  });
+
+  document.querySelectorAll("[data-scope-tab]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      state.scope = button.dataset.scopeTab;
+      document.querySelectorAll("[data-scope-tab]").forEach((tab) => {
+        tab.classList.toggle("active", tab === button);
+      });
+      syncAdminCopy();
       await loadTickets();
     });
   });
@@ -193,6 +208,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.location.href = `/ticket/${ticketId}`;
   }
 
+  function syncAdminCopy() {
+    if (state.user.role !== "admin") {
+      return;
+    }
+
+    const isMine = state.scope === "mine";
+    bannerTitle.textContent = isMine ? "Panel de admins · Mis tickets" : "Panel de admins · Otros tickets";
+    bannerCopy.textContent = isMine
+      ? "Aqui solo ves tickets donde ya participas, te invitaron o eres admin principal."
+      : "Aqui ves tickets donde aun no participas, para revisarlos y unirte si hace falta.";
+  }
+
   function renderTickets() {
     ticketsBody.innerHTML = "";
 
@@ -209,9 +236,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       const safeDescription = TicketsApp.escapeHtml(ticket.description.slice(0, 90));
       const safeSite = TicketsApp.escapeHtml(ticket.site);
       const safeAdmin = TicketsApp.escapeHtml(ticket.primaryAdmin ? ticket.primaryAdmin.name : "Sin admin principal");
-      const unreadMarkup = ticket.hasUnread
-        ? `<span class="chip unread-chip">Nuevo ${ticket.unreadCount}</span>`
-        : '<span class="muted-line">Sin novedades</span>';
+      const unreadMarkup =
+        state.user.role === "admin" && state.scope === "others"
+          ? '<span class="muted-line">Sin participar</span>'
+          : ticket.hasUnread
+            ? `<span class="chip unread-chip">Nuevo ${ticket.unreadCount}</span>`
+            : '<span class="muted-line">Sin novedades</span>';
 
       const row = document.createElement("tr");
       row.className = `ticket-row${ticket.hasUnread ? " has-unread" : ""}`;
@@ -254,6 +284,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
 
       if (state.user.role === "admin") {
+        params.set("scope", state.scope);
         params.set("site", state.site);
       }
 
