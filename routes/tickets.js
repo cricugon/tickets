@@ -2,6 +2,11 @@ const express = require("express");
 
 const asyncHandler = require("../middleware/asyncHandler");
 const { protect, requireRole } = require("../middleware/auth");
+const {
+  cleanupUploadedAttachments,
+  downloadAttachment,
+  uploadAttachments
+} = require("../config/storage");
 const Ticket = require("../models/Ticket");
 const User = require("../models/User");
 
@@ -186,6 +191,10 @@ function ticketSummary(ticket, viewer) {
   const participantIds = new Set();
   const unreadState = getUnreadState(ticket, viewer);
   const isParticipant = isTrackedForUser(ticket, viewer);
+  const attachmentCount = (ticket.messages || []).reduce(
+    (sum, message) => sum + (message.attachments || []).length,
+    0
+  );
 
   if (ticket.consultant?._id) {
     participantIds.add(ticket.consultant._id.toString());
@@ -218,11 +227,26 @@ function ticketSummary(ticket, viewer) {
     updatedAt: ticket.updatedAt,
     closedAt: ticket.closedAt,
     participantCount: participantIds.size,
+    attachmentCount,
     isParticipant,
     unreadCount: unreadState.unreadCount,
     hasUnread: unreadState.hasUnread,
     lastSeenAt: unreadState.lastSeenAt,
     latestUnreadAt: unreadState.latestUnreadAt
+  };
+}
+
+function serializeAttachment(ticket, attachment) {
+  return {
+    id: attachment._id,
+    originalName: attachment.originalName,
+    contentType: attachment.contentType,
+    size: attachment.size,
+    uploadedAt: attachment.uploadedAt,
+    uploadedByName: attachment.uploadedByName,
+    isImage: attachment.contentType.startsWith("image/"),
+    url: `/api/tickets/${ticket._id}/attachments/${attachment._id}`,
+    downloadUrl: `/api/tickets/${ticket._id}/attachments/${attachment._id}?download=1`
   };
 }
 
@@ -236,6 +260,7 @@ function ticketDetail(ticket, viewer) {
       authorRole: message.authorRole,
       body: message.body,
       kind: message.kind,
+      attachments: (message.attachments || []).map((attachment) => serializeAttachment(ticket, attachment)),
       createdAt: message.createdAt
     })),
     activityLog: (ticket.activityLog || [])
@@ -251,6 +276,36 @@ function ticketDetail(ticket, viewer) {
         createdAt: entry.createdAt
       }))
   };
+}
+
+function findAttachmentById(ticket, attachmentId) {
+  for (const message of ticket.messages || []) {
+    const attachment = (message.attachments || []).find(
+      (item) => item._id.toString() === attachmentId
+    );
+
+    if (attachment) {
+      return attachment;
+    }
+  }
+
+  return null;
+}
+
+function buildContentDisposition(filename, forceDownload = false) {
+  const normalized = String(filename || "archivo")
+    .normalize("NFKD")
+    .replace(/[^\x00-\x7F]/g, "")
+    .replace(/["\\]/g, "")
+    .replace(/[\r\n]+/g, " ")
+    .trim() || "archivo";
+  const type = forceDownload ? "attachment" : "inline";
+
+  return `${type}; filename="${normalized}"; filename*=UTF-8''${encodeURIComponent(filename || "archivo")}`;
+}
+
+function normalizeText(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function addActivity(ticket, { type, actor, description, meta = {} }) {
@@ -342,7 +397,10 @@ router.get(
 router.post(
   "/",
   asyncHandler(async (req, res) => {
-    const { title, description, severity = "medium", site = "" } = req.body;
+    const { severity = "medium", attachments = [] } = req.body;
+    const title = normalizeText(req.body.title);
+    const description = normalizeText(req.body.description);
+    const site = normalizeText(req.body.site);
 
     if (req.user.role !== "consultant") {
       return res.status(403).json({ message: "Solo los consultores pueden abrir tickets" });
@@ -352,36 +410,52 @@ router.post(
       return res.status(400).json({ message: "Asunto y descripcion son obligatorios" });
     }
 
-    const resolvedSite = req.user.site || site.trim();
+    const resolvedSite = req.user.site || site;
 
     if (!resolvedSite) {
       return res.status(400).json({ message: "La web del ticket es obligatoria" });
     }
 
     const ticket = new Ticket({
-      title: title.trim(),
-      description: description.trim(),
+      title,
+      description,
       severity,
       site: resolvedSite,
       consultant: req.user._id,
       status: "open"
     });
 
-    ticket.messages.push({
-      author: req.user._id,
-      authorName: req.user.name,
-      authorRole: req.user.role,
-      body: description.trim()
-    });
+    let uploadedAttachments = [];
 
-    addActivity(ticket, {
-      type: "ticket_created",
-      actor: req.user,
-      description: `${req.user.name} creo el ticket`
-    });
-    setTicketReadState(ticket, req.user);
+    try {
+      uploadedAttachments = await uploadAttachments({
+        ticketId: ticket._id.toString(),
+        segment: "descripcion",
+        attachments,
+        actor: req.user
+      });
 
-    await ticket.save();
+      ticket.messages.push({
+        author: req.user._id,
+        authorName: req.user.name,
+        authorRole: req.user.role,
+        body: description,
+        kind: "description",
+        attachments: uploadedAttachments
+      });
+
+      addActivity(ticket, {
+        type: "ticket_created",
+        actor: req.user,
+        description: `${req.user.name} creo el ticket`
+      });
+      setTicketReadState(ticket, req.user);
+
+      await ticket.save();
+    } catch (error) {
+      await cleanupUploadedAttachments(uploadedAttachments);
+      throw error;
+    }
 
     const hydratedTicket = await getTicketOr404(ticket._id);
     res.status(201).json({
@@ -435,7 +509,8 @@ router.post(
 router.post(
   "/:id/messages",
   asyncHandler(async (req, res) => {
-    const { body } = req.body;
+    const attachments = Array.isArray(req.body.attachments) ? req.body.attachments : [];
+    const body = normalizeText(req.body.body);
     const ticket = await Ticket.findById(req.params.id).populate(ticketPopulate);
 
     if (!ticket) {
@@ -450,27 +525,76 @@ router.post(
       return res.status(400).json({ message: "El ticket esta cerrado" });
     }
 
-    if (!body || !body.trim()) {
-      return res.status(400).json({ message: "El mensaje no puede estar vacio" });
+    if (!body && attachments.length === 0) {
+      return res.status(400).json({ message: "Debes escribir un mensaje o adjuntar al menos un fichero" });
     }
 
-    ticket.messages.push({
-      author: req.user._id,
-      authorName: req.user.name,
-      authorRole: req.user.role,
-      body: body.trim()
-    });
+    let uploadedAttachments = [];
 
-    ticket.status = req.user.role === "consultant" ? "client_replied" : "in_progress";
-    setTicketReadState(ticket, req.user);
+    try {
+      uploadedAttachments = await uploadAttachments({
+        ticketId: ticket._id.toString(),
+        segment: "mensajes",
+        attachments,
+        actor: req.user
+      });
 
-    await ticket.save();
+      ticket.messages.push({
+        author: req.user._id,
+        authorName: req.user.name,
+        authorRole: req.user.role,
+        body,
+        attachments: uploadedAttachments
+      });
+
+      ticket.status = req.user.role === "consultant" ? "client_replied" : "in_progress";
+      setTicketReadState(ticket, req.user);
+
+      await ticket.save();
+    } catch (error) {
+      await cleanupUploadedAttachments(uploadedAttachments);
+      throw error;
+    }
 
     const updatedTicket = await getTicketOr404(ticket._id);
     res.status(201).json({
       message: "Mensaje enviado",
       ticket: ticketDetail(updatedTicket, req.user)
     });
+  })
+);
+
+router.get(
+  "/:id/attachments/:attachmentId",
+  asyncHandler(async (req, res) => {
+    const ticket = await Ticket.findById(req.params.id).populate(ticketPopulate);
+
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket no encontrado" });
+    }
+
+    if (!canAccessTicket(ticket, req.user)) {
+      return res.status(403).json({ message: "No puedes acceder a este adjunto" });
+    }
+
+    const attachment = findAttachmentById(ticket, req.params.attachmentId);
+
+    if (!attachment) {
+      return res.status(404).json({ message: "Adjunto no encontrado" });
+    }
+
+    const file = await downloadAttachment(attachment);
+    const forceDownload = req.query.download === "1";
+
+    res.setHeader("Content-Type", file.contentType);
+    res.setHeader("Content-Length", String(file.body.length));
+    res.setHeader("Cache-Control", "private, max-age=60");
+    res.setHeader(
+      "Content-Disposition",
+      buildContentDisposition(attachment.originalName, forceDownload)
+    );
+
+    return res.send(file.body);
   })
 );
 

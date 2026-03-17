@@ -104,13 +104,19 @@
               <div class="card-header">
                 <div>
                   <h2 class="card-title">Responder ticket</h2>
-                  <p class="card-subtitle">El chat queda separado del registro de eventos para no mezclar contexto.</p>
+                  <p class="card-subtitle">El chat queda separado del registro de eventos para no mezclar contexto ni adjuntos.</p>
                 </div>
               </div>
               <form id="message-form" class="composer">
                 <div class="field">
                   <label for="message-body">Mensaje</label>
                   <textarea id="message-body" name="body" placeholder="Escribe aqui tu mensaje"></textarea>
+                </div>
+                <div class="field">
+                  <label for="message-attachments">Adjuntos</label>
+                  <input id="message-attachments" name="attachments" type="file" multiple />
+                  <p class="helper">Adjunta imagenes, documentos o ejemplos para aportar mas contexto.</p>
+                  <div id="message-attachments-list" class="selected-files"></div>
                 </div>
                 <button class="primary-button" type="submit">Enviar mensaje</button>
               </form>

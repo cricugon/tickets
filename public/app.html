@@ -131,7 +131,7 @@
           <div class="card-header">
             <div>
               <h2 class="card-title">Crear ticket</h2>
-              <p class="card-subtitle">Abre una incidencia indicando gravedad, asunto y detalle.</p>
+              <p class="card-subtitle">Abre una incidencia indicando gravedad, asunto, detalle y ficheros de apoyo.</p>
             </div>
             <button id="close-ticket-modal" class="ghost-button" type="button">Cerrar</button>
           </div>
@@ -158,6 +158,12 @@
             <div class="field">
               <label for="ticket-description">Descripcion</label>
               <textarea id="ticket-description" name="description" placeholder="Describe el problema y el contexto" required></textarea>
+            </div>
+            <div class="field">
+              <label for="ticket-attachments">Adjuntos</label>
+              <input id="ticket-attachments" name="attachments" type="file" multiple />
+              <p class="helper">Puedes anadir capturas, PDFs u otros ficheros. Maximo 5 archivos y 20 MB en total.</p>
+              <div id="ticket-attachments-list" class="selected-files"></div>
             </div>
             <button class="primary-button" type="submit">Guardar ticket</button>
           </form>

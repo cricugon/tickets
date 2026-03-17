@@ -26,14 +26,58 @@ const ticketMessageSchema = new mongoose.Schema(
     },
     body: {
       type: String,
-      required: true,
+      default: "",
       trim: true
     },
     kind: {
       type: String,
-      enum: ["message"],
+      enum: ["message", "description"],
       default: "message"
     },
+    attachments: [
+      new mongoose.Schema(
+        {
+          bucket: {
+            type: String,
+            required: true
+          },
+          path: {
+            type: String,
+            required: true
+          },
+          originalName: {
+            type: String,
+            required: true,
+            trim: true
+          },
+          contentType: {
+            type: String,
+            required: true,
+            trim: true
+          },
+          size: {
+            type: Number,
+            required: true,
+            min: 0
+          },
+          uploadedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true
+          },
+          uploadedByName: {
+            type: String,
+            required: true,
+            trim: true
+          },
+          uploadedAt: {
+            type: Date,
+            default: Date.now
+          }
+        },
+        { _id: true }
+      )
+    ],
     createdAt: {
       type: Date,
       default: Date.now

@@ -6,7 +6,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     scope: "mine",
     site: "all",
     query: "",
-    notifications: []
+    notifications: [],
+    createAttachments: []
   };
 
   const currentUserPill = document.getElementById("current-user-pill");
@@ -25,6 +26,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const ticketModal = document.getElementById("ticket-modal");
   const closeTicketModalButton = document.getElementById("close-ticket-modal");
   const ticketForm = document.getElementById("ticket-form");
+  const ticketAttachments = document.getElementById("ticket-attachments");
+  const ticketAttachmentsList = document.getElementById("ticket-attachments-list");
   const ticketSite = document.getElementById("ticket-site");
   const ticketFormMessage = document.getElementById("ticket-form-message");
   const notificationButton = document.getElementById("notification-button");
@@ -117,6 +120,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  ticketAttachments.addEventListener("change", (event) => {
+    syncSelectedFiles(event.target.files, "createAttachments");
+    ticketAttachments.value = "";
+  });
+
   notificationButton.addEventListener("click", (event) => {
     event.stopPropagation();
     const isOpen = !notificationPanel.classList.contains("hidden");
@@ -134,27 +142,31 @@ document.addEventListener("DOMContentLoaded", async () => {
   ticketForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(ticketForm);
+    const submitButton = ticketForm.querySelector("button[type='submit']");
 
     try {
       ticketFormMessage.textContent = "";
+      submitButton.disabled = true;
       await TicketsApp.api("/api/tickets", {
         method: "POST",
         body: {
           title: formData.get("title"),
           severity: formData.get("severity"),
           site: formData.get("site"),
-          description: formData.get("description")
+          description: formData.get("description"),
+          attachments: await Promise.all(state.createAttachments.map((file) => TicketsApp.fileToAttachmentPayload(file)))
         }
       });
 
       TicketsApp.createToast("Ticket creado", "success");
-      ticketForm.reset();
-      ticketSite.value = state.user.site || "";
+      resetTicketForm();
       ticketModal.classList.remove("open");
       await loadTickets();
       await loadNotifications();
     } catch (error) {
       ticketFormMessage.textContent = error.message;
+    } finally {
+      submitButton.disabled = false;
     }
   });
 
@@ -253,6 +265,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const safeDescription = TicketsApp.escapeHtml(ticket.description.slice(0, 90));
       const safeSite = TicketsApp.escapeHtml(ticket.site);
       const safeAdmin = TicketsApp.escapeHtml(ticket.primaryAdmin ? ticket.primaryAdmin.name : "Sin admin principal");
+      const attachmentCopy = ticket.attachmentCount ? ` · ${ticket.attachmentCount} adjunto(s)` : "";
       const unreadMarkup =
         state.user.role === "admin" && state.scope === "others"
           ? '<span class="muted-line">Sin participar</span>'
@@ -271,7 +284,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         <td><span class="chip status-${ticket.status}">${TicketsApp.statusLabels[ticket.status]}</span></td>
         <td>
           <span class="headline-link">${safeReference}</span>
-          <span class="muted-line">${ticket.participantCount} participante(s)</span>
+          <span class="muted-line">${ticket.participantCount} participante(s)${attachmentCopy}</span>
         </td>
         <td>
           <span class="headline-link">${safeTitle}</span>
@@ -333,6 +346,86 @@ document.addEventListener("DOMContentLoaded", async () => {
     const data = await TicketsApp.api(`/api/tickets?${params.toString()}`);
     unassignedCount.textContent = data.tickets.length;
     unassignedCount.classList.toggle("hidden", data.tickets.length === 0);
+  }
+
+  function getFileFingerprint(file) {
+    return [file.name, file.size, file.lastModified, file.type].join(":");
+  }
+
+  function validateSelectedFiles(files) {
+    const nextFiles = [...files];
+    const combined = [...state.createAttachments, ...nextFiles];
+    const uniqueByFingerprint = new Map(combined.map((file) => [getFileFingerprint(file), file]));
+    const deduped = [...uniqueByFingerprint.values()];
+    const totalBytes = deduped.reduce((sum, file) => sum + file.size, 0);
+
+    if (deduped.length > TicketsApp.attachmentLimits.maxFiles) {
+      throw new Error(`Solo puedes adjuntar ${TicketsApp.attachmentLimits.maxFiles} ficheros por ticket.`);
+    }
+
+    const oversized = deduped.find((file) => file.size > TicketsApp.attachmentLimits.maxFileSize);
+
+    if (oversized) {
+      throw new Error(
+        `${oversized.name} supera el limite de ${TicketsApp.formatFileSize(TicketsApp.attachmentLimits.maxFileSize)}.`
+      );
+    }
+
+    if (totalBytes > TicketsApp.attachmentLimits.maxTotalSize) {
+      throw new Error(
+        `La suma de adjuntos supera ${TicketsApp.formatFileSize(TicketsApp.attachmentLimits.maxTotalSize)}.`
+      );
+    }
+
+    return deduped;
+  }
+
+  function syncSelectedFiles(files, stateKey) {
+    try {
+      state[stateKey] = validateSelectedFiles(files);
+      renderSelectedFiles();
+    } catch (error) {
+      TicketsApp.createToast(error.message, "error");
+    }
+  }
+
+  function removeSelectedFile(index) {
+    state.createAttachments.splice(index, 1);
+    renderSelectedFiles();
+  }
+
+  function renderSelectedFiles() {
+    if (!state.createAttachments.length) {
+      ticketAttachmentsList.innerHTML = "";
+      return;
+    }
+
+    ticketAttachmentsList.innerHTML = state.createAttachments
+      .map(
+        (file, index) => `
+          <div class="selected-file">
+            <div class="selected-file-meta">
+              <strong>${TicketsApp.escapeHtml(file.name)}</strong>
+              <span>${TicketsApp.formatFileSize(file.size)}</span>
+            </div>
+            <button class="ghost-button selected-file-remove" type="button" data-remove-index="${index}">Quitar</button>
+          </div>
+        `
+      )
+      .join("");
+
+    ticketAttachmentsList.querySelectorAll("[data-remove-index]").forEach((button) => {
+      button.addEventListener("click", () => removeSelectedFile(Number(button.dataset.removeIndex)));
+    });
+  }
+
+  function resetTicketForm() {
+    ticketForm.reset();
+    state.createAttachments = [];
+    renderSelectedFiles();
+    ticketAttachments.value = "";
+    ticketSite.value = state.user.site || "";
+    ticketFormMessage.textContent = "";
   }
 
   await loadTickets();

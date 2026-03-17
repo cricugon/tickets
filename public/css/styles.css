@@ -560,6 +560,61 @@ button {
   color: var(--muted);
 }
 
+.selected-files,
+.timeline-attachments {
+  display: grid;
+  gap: 12px;
+}
+
+.selected-file,
+.attachment-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(17, 60, 83, 0.12);
+  background: rgba(17, 60, 83, 0.03);
+}
+
+.selected-file {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.selected-file-meta,
+.attachment-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.selected-file-meta span,
+.attachment-meta span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.selected-file-remove,
+.attachment-download {
+  justify-self: start;
+  padding: 8px 14px;
+}
+
+.attachment-link {
+  color: var(--accent-deep);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.attachment-image {
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  border-radius: 16px;
+  border: 1px solid rgba(17, 60, 83, 0.08);
+  background: white;
+}
+
 .hidden {
   display: none !important;
 }

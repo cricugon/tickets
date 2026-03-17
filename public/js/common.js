@@ -14,6 +14,11 @@
     high: "Alta",
     critical: "Critica"
   };
+  const attachmentLimits = {
+    maxFiles: 5,
+    maxFileSize: 10 * 1024 * 1024,
+    maxTotalSize: 20 * 1024 * 1024
+  };
 
   async function api(url, options = {}) {
     const config = {
@@ -162,9 +167,47 @@
     return items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
+  function formatFileSize(bytes = 0) {
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+      return "0 B";
+    }
+
+    const units = ["B", "KB", "MB", "GB"];
+    let value = bytes;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+
+    return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error(`No se pudo leer el fichero ${file.name}`));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function fileToAttachmentPayload(file) {
+    return {
+      name: file.name,
+      size: file.size,
+      type: file.type || "application/octet-stream",
+      content: await readFileAsDataUrl(file)
+    };
+  }
+
   window.TicketsApp = {
+    attachmentLimits,
     api,
+    fileToAttachmentPayload,
     formatDate,
+    formatFileSize,
     relativeDate,
     initials,
     createToast,
