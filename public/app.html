@@ -82,6 +82,10 @@
             <div id="scope-tabs" class="tabs hidden">
               <button class="tab-button active" type="button" data-scope-tab="mine">Mis tickets</button>
               <button class="tab-button" type="button" data-scope-tab="others">Otros tickets</button>
+              <button class="tab-button" type="button" data-scope-tab="unassigned">
+                Sin atender
+                <span id="unassigned-count" class="notification-badge hidden">0</span>
+              </button>
             </div>
             <input id="search-input" class="filter-input" type="search" placeholder="Buscar por asunto, referencia o web" />
             <select id="site-filter" class="filter-select hidden">

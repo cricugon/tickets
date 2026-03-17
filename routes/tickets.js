@@ -90,6 +90,14 @@ function buildScopeCondition(viewer, scope = "mine") {
     };
   }
 
+  if (scope === "unassigned") {
+    return {
+      primaryAdmin: null,
+      "supportingAdmins.0": { $exists: false },
+      "invitedAdmins.0": { $exists: false }
+    };
+  }
+
   if (scope === "all") {
     return {};
   }

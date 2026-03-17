@@ -19,6 +19,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const searchInput = document.getElementById("search-input");
   const siteFilter = document.getElementById("site-filter");
   const scopeTabs = document.getElementById("scope-tabs");
+  const unassignedCount = document.getElementById("unassigned-count");
   const ticketsBody = document.getElementById("tickets-body");
   const ticketsEmpty = document.getElementById("tickets-empty");
   const ticketModal = document.getElementById("ticket-modal");
@@ -59,12 +60,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadSites();
   }
 
+  function setStatusTab(status) {
+    state.status = status;
+    document.querySelectorAll("[data-status-tab]").forEach((tab) => {
+      tab.classList.toggle("active", tab.dataset.statusTab === status);
+    });
+  }
+
   document.querySelectorAll("[data-status-tab]").forEach((button) => {
     button.addEventListener("click", async () => {
-      state.status = button.dataset.statusTab;
-      document.querySelectorAll("[data-status-tab]").forEach((tab) => {
-        tab.classList.toggle("active", tab === button);
-      });
+      setStatusTab(button.dataset.statusTab);
       await loadTickets();
     });
   });
@@ -75,6 +80,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       document.querySelectorAll("[data-scope-tab]").forEach((tab) => {
         tab.classList.toggle("active", tab === button);
       });
+      if (state.scope === "unassigned") {
+        setStatusTab("open");
+      }
       syncAdminCopy();
       await loadTickets();
     });
@@ -213,11 +221,20 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    const isMine = state.scope === "mine";
-    bannerTitle.textContent = isMine ? "Panel de admins · Mis tickets" : "Panel de admins · Otros tickets";
-    bannerCopy.textContent = isMine
-      ? "Aqui solo ves tickets donde ya participas, te invitaron o eres admin principal."
-      : "Aqui ves tickets donde aun no participas, para revisarlos y unirte si hace falta.";
+    if (state.scope === "mine") {
+      bannerTitle.textContent = "Panel de admins · Mis tickets";
+      bannerCopy.textContent = "Aqui solo ves tickets donde ya participas, te invitaron o eres admin principal.";
+      return;
+    }
+
+    if (state.scope === "others") {
+      bannerTitle.textContent = "Panel de admins · Otros tickets";
+      bannerCopy.textContent = "Aqui ves tickets donde aun no participas, para revisarlos y unirte si hace falta.";
+      return;
+    }
+
+    bannerTitle.textContent = "Panel de admins · Sin atender";
+    bannerCopy.textContent = "Cola de tickets abiertos sin ningun admin asignado todavia.";
   }
 
   function renderTickets() {
@@ -239,6 +256,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const unreadMarkup =
         state.user.role === "admin" && state.scope === "others"
           ? '<span class="muted-line">Sin participar</span>'
+          : state.user.role === "admin" && state.scope === "unassigned"
+            ? '<span class="chip unread-chip">Sin atender</span>'
           : ticket.hasUnread
             ? `<span class="chip unread-chip">Nuevo ${ticket.unreadCount}</span>`
             : '<span class="muted-line">Sin novedades</span>';
@@ -292,9 +311,28 @@ document.addEventListener("DOMContentLoaded", async () => {
       state.tickets = data.tickets;
       renderMetrics();
       renderTickets();
+
+      if (state.user.role === "admin") {
+        await loadUnassignedCount();
+      }
     } catch (error) {
       TicketsApp.createToast(error.message, "error");
     }
+  }
+
+  async function loadUnassignedCount() {
+    const params = new URLSearchParams({
+      status: "open",
+      scope: "unassigned"
+    });
+
+    if (state.site && state.site !== "all") {
+      params.set("site", state.site);
+    }
+
+    const data = await TicketsApp.api(`/api/tickets?${params.toString()}`);
+    unassignedCount.textContent = data.tickets.length;
+    unassignedCount.classList.toggle("hidden", data.tickets.length === 0);
   }
 
   await loadTickets();
